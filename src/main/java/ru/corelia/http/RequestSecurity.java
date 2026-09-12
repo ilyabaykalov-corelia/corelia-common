@@ -145,11 +145,15 @@ public class RequestSecurity extends OncePerRequestFilter {
             throw new ApiException(403, "Сервису запрещён доступ к этому API");
         if (peer.equals("corelia-attachment-service")
                 && !path.equals("/internal/v1/health")
-                && !request.getMethod().equals("GET"))
-            throw new ApiException(403, "Сервис вложений может только читать документы");
+                && !request.getMethod().equals("GET")
+                && !(request.getMethod().equals("POST") && path.matches("/internal/v1/documents/[^/]+/[^/]+/attachment-commands")))
+            throw new ApiException(403, "Сервису вложений разрешены чтение и команды состава документа");
+        if (path.endsWith("/attachment-commands") && !peer.equals("corelia-attachment-service"))
+            throw new ApiException(403, "Команды метаданных принимаются только от сервиса вложений");
         if (peer.equals("corelia-document-service")
                 && !path.startsWith("/internal/v1/process")
-                && !path.equals("/internal/v1/health"))
-            throw new ApiException(403, "Сервис документов может обращаться только к процессам");
+                && !path.equals("/internal/v1/health")
+                && !(request.getMethod().equals("GET") && path.matches("/internal/v1/documents/[^/]+/[^/]+/workflow")))
+            throw new ApiException(403, "Сервис документов может запускать процессы и читать их состояние");
     }
 }
