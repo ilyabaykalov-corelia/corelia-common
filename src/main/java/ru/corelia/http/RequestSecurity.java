@@ -138,7 +138,7 @@ public class RequestSecurity extends OncePerRequestFilter {
             throw new ApiException(401, "Некорректный сертификат сервиса");
         }
         Set<String> allowed = new HashSet<>(List.of("corelia-gateway"));
-        if (service.equals("corelia-workflow-service")) allowed.add("corelia-document-service");
+        if (service.equals("corelia-workflow-service") || service.equals("corelia-attachment-service")) allowed.add("corelia-document-service");
         if (service.equals("corelia-document-service")) allowed.add("corelia-attachment-service");
         if (path.equals("/internal/v1/health")) allowed.add(service);
         if (!allowed.contains(peer))
@@ -150,9 +150,12 @@ public class RequestSecurity extends OncePerRequestFilter {
             throw new ApiException(403, "Сервису вложений разрешены чтение и команды состава документа");
         if (path.endsWith("/attachment-commands") && !peer.equals("corelia-attachment-service"))
             throw new ApiException(403, "Команды метаданных принимаются только от сервиса вложений");
+        if (path.startsWith("/internal/v1/initial-attachments/") && !peer.equals("corelia-document-service"))
+            throw new ApiException(403, "Подготовка первого файла доступна только сервису документов");
         if (peer.equals("corelia-document-service")
                 && !path.startsWith("/internal/v1/process")
                 && !path.equals("/internal/v1/health")
+                && !(service.equals("corelia-attachment-service") && request.getMethod().equals("POST") && path.matches("/internal/v1/initial-attachments/[^/]+"))
                 && !(request.getMethod().equals("GET") && path.matches("/internal/v1/documents/[^/]+/[^/]+/workflow")))
             throw new ApiException(403, "Сервис документов может запускать процессы и читать их состояние");
     }
