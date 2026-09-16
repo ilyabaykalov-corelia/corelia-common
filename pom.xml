@@ -8,6 +8,7 @@
     </parent>
     <artifactId>corelia-common</artifactId>
     <dependencies>
+        <dependency><groupId>ru.corelia</groupId><artifactId>corelia-configuration</artifactId><version>${project.version}</version></dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>
