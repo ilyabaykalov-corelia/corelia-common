@@ -45,10 +45,10 @@ public class JwtVerifier {
         String issuer = config.required("PLATFORM_V_KEYCLOAK_ISSUER", config.issuer());
         if (!issuer.equals(payload.path("iss").asString("")))
             throw new ApiException(401, "Keycloak access token выпущен неизвестным issuer");
-        String audience = config.audience();
+        Set<String> audiences = config.audiences();
         if (!stringValues(payload.path("aud")).stream()
                 .map(node -> text(node))
-                .anyMatch(audience::equals)) {
+                .anyMatch(audiences::contains)) {
             throw new ApiException(401, "Keycloak access token выпущен для другого audience");
         }
         long now = Instant.now().getEpochSecond();

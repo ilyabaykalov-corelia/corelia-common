@@ -86,6 +86,14 @@ public class CoreliaConfig {
         return value("CORELIA_AUTH_AUDIENCE", clientId());
     }
 
+    public java.util.Set<String> audiences() {
+        String configured = value("CORELIA_AUTH_AUDIENCES", audience());
+        return java.util.Arrays.stream(configured.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    }
+
     public static String trim(String url) {
         return url.replaceAll("/+$", "");
     }
