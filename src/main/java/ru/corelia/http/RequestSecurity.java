@@ -56,9 +56,12 @@ public class RequestSecurity extends OncePerRequestFilter {
         MDC.put("requestId", requestId);
         try {
             if (gateway) {
-                response.setHeader("Access-Control-Allow-Origin", config.value("CORS_ORIGIN", "*"));
-                response.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-                response.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+                String corsOrigin = config.value("CORS_ORIGIN");
+                if (!corsOrigin.isBlank()) {
+                    response.setHeader("Access-Control-Allow-Origin", corsOrigin);
+                    response.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+                    response.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+                }
                 if (request.getMethod().equals("OPTIONS")) {
                     response.setStatus(204);
                     return;
