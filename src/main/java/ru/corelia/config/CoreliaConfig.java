@@ -81,6 +81,11 @@ public class CoreliaConfig {
         return value("PLATFORM_V_KEYCLOAK_CLIENT_ID", "PlatformAuth-Proxy");
     }
 
+    /** Audience access token; may differ from the OAuth client used for interactive login. */
+    public String audience() {
+        return value("CORELIA_AUTH_AUDIENCE", clientId());
+    }
+
     public static String trim(String url) {
         return url.replaceAll("/+$", "");
     }
