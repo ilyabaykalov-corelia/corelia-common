@@ -87,6 +87,30 @@ public class ServiceClient implements AutoCloseable {
                 auth);
     }
 
+    public HttpResponse<InputStream> rawStream(String target, String path, AuthContext auth) {
+        String base = config.required("corelia.services." + target, config.value("corelia.services." + target));
+        URI uri = URI.create(base + path);
+        if (!uri.getScheme().equals("https") || !path.startsWith("/internal/v1/"))
+            throw new IllegalStateException("Внутренний адрес должен использовать HTTPS");
+        try {
+            var request = HttpRequest.newBuilder(uri)
+                    .timeout(Duration.ofMillis(config.number("corelia.internal.timeout-ms", 60000)))
+                    .header("Accept", "*/*")
+                    .GET();
+            if (auth != null) request.header("Authorization", auth.authorization());
+            var response = client().send(request.build(), HttpResponse.BodyHandlers.ofInputStream());
+            if (response.statusCode() >= 200 && response.statusCode() < 300) return response;
+            try (var body = response.body()) {
+                throw new ApiException(response.statusCode(), "Ошибка внутреннего сервиса " + target);
+            }
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw new ApiException(503, "Вызов сервиса прерван");
+        } catch (IOException error) {
+            throw new ApiException(502, "Сервис " + target + " недоступен");
+        }
+    }
+
     public JsonNode callMultipart(
             String target,
             String path,

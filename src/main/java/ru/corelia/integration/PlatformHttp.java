@@ -61,6 +61,28 @@ public class PlatformHttp {
                 headers);
     }
 
+    public HttpResponse<java.io.InputStream> rawStream(
+            String url, String method, Map<String, String> headers) {
+        try {
+            var builder = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(30))
+                    .method(method, HttpRequest.BodyPublishers.noBody());
+            headers.forEach(builder::header);
+            var response = client.send(builder.build(), HttpResponse.BodyHandlers.ofInputStream());
+            if (response.statusCode() >= 200 && response.statusCode() < 300) return response;
+            try (var body = response.body()) {
+                String raw = new String(body.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                throw new ApiException(response.statusCode() >= 500 ? 502 : response.statusCode(), fallback(normalizeText(raw), "Platform V API вернул HTTP " + response.statusCode()));
+            }
+        } catch (HttpTimeoutException error) {
+            throw new ApiException(504, "Истекло время ожидания ответа Platform V");
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw new ApiException(503, "Вызов Platform V прерван при остановке Corelia");
+        } catch (IOException | IllegalArgumentException error) {
+            throw new ApiException(502, "Ошибка вызова Platform V: " + error.getClass().getSimpleName());
+        }
+    }
+
     public HttpResponse<byte[]> raw(
             String url,
             String method,
