@@ -96,13 +96,37 @@ public class ServiceClient implements AutoCloseable {
             String fileContentType,
             InputStream file,
             AuthContext auth) {
+        return callMultipart(
+                target,
+                path,
+                method,
+                Map.of("requestId", requestId),
+                fileName,
+                fileContentType,
+                file,
+                auth);
+    }
+
+    public JsonNode callMultipart(
+            String target,
+            String path,
+            String method,
+            Map<String, String> fields,
+            String fileName,
+            String fileContentType,
+            InputStream file,
+            AuthContext auth) {
         String boundary = "Corelia" + UUID.randomUUID().toString().replace("-", "");
+        StringBuilder form = new StringBuilder();
+        fields.forEach(
+                (name, value) ->
+                        form.append("--").append(boundary)
+                                .append("\r\nContent-Disposition: form-data; name=\"")
+                                .append(name).append("\"\r\n\r\n")
+                                .append(value).append("\r\n"));
         byte[] prefix =
-                ("--"
-                                + boundary
-                                + "\r\nContent-Disposition: form-data; name=\"requestId\"\r\n\r\n"
-                                + requestId
-                                + "\r\n--"
+                (form
+                                .append("--")
                                 + boundary
                                 + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\""
                                 + fileName.replace("\r", "%0D").replace("\n", "%0A").replace("\"", "%22")
