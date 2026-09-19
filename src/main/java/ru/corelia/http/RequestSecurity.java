@@ -79,17 +79,7 @@ public class RequestSecurity extends OncePerRequestFilter {
                                             "/api/core/v1/health",
                                             "/internal/v1/health")
                                     .contains(path);
-            boolean login =
-                    request.getMethod().equals("POST")
-                            && Set.of(
-                                            "/api/core/v1/auth/login",
-                                            "/api/core/v1/auth/refresh",
-                                            "/api/core/v1/auth/logout",
-                                            "/internal/v1/auth/login",
-                                            "/internal/v1/auth/refresh",
-                                            "/internal/v1/auth/logout")
-                                    .contains(path);
-            if (!health && !login)
+            if (!health)
                 request.setAttribute(
                         AUTH, verifier.authenticate(request.getHeader("Authorization")));
             if (request.getMethod().equals("HEAD"))
