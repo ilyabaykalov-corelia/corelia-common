@@ -76,6 +76,67 @@ public class ServiceClient implements AutoCloseable {
 
     public HttpResponse<byte[]> raw(
             String target, String path, String method, byte[] bytes, AuthContext auth) {
+        return raw(
+                target,
+                path,
+                method,
+                bytes.length == 0
+                        ? HttpRequest.BodyPublishers.noBody()
+                        : HttpRequest.BodyPublishers.ofByteArray(bytes),
+                "application/json",
+                auth);
+    }
+
+    public JsonNode callMultipart(
+            String target,
+            String path,
+            String method,
+            String requestId,
+            String fileName,
+            String fileContentType,
+            InputStream file,
+            AuthContext auth) {
+        String boundary = "Corelia" + UUID.randomUUID().toString().replace("-", "");
+        byte[] prefix =
+                ("--"
+                                + boundary
+                                + "\r\nContent-Disposition: form-data; name=\"requestId\"\r\n\r\n"
+                                + requestId
+                                + "\r\n--"
+                                + boundary
+                                + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\""
+                                + fileName.replace("\r", "%0D").replace("\n", "%0A").replace("\"", "%22")
+                                + "\"\r\nContent-Type: "
+                                + fileContentType.replace("\r", "").replace("\n", "")
+                                + "\r\n\r\n")
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] suffix = ("\r\n--" + boundary + "--\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        var response =
+                raw(
+                        target,
+                        path,
+                        method,
+                        HttpRequest.BodyPublishers.concat(
+                                HttpRequest.BodyPublishers.ofByteArray(prefix),
+                                HttpRequest.BodyPublishers.ofInputStream(() -> file),
+                                HttpRequest.BodyPublishers.ofByteArray(suffix)),
+                        "multipart/form-data; boundary=" + boundary,
+                        auth);
+        if (response.body().length == 0) return object();
+        try {
+            return MAPPER.readTree(response.body());
+        } catch (RuntimeException error) {
+            throw new ApiException(502, "Сервис " + target + " вернул некорректный JSON");
+        }
+    }
+
+    private HttpResponse<byte[]> raw(
+            String target,
+            String path,
+            String method,
+            HttpRequest.BodyPublisher body,
+            String contentType,
+            AuthContext auth) {
         String base =
                 config.required(
                         "corelia.services." + target, config.value("corelia.services." + target));
@@ -97,13 +158,9 @@ public class ServiceClient implements AutoCloseable {
                             .timeout(
                                     Duration.ofMillis(
                                             config.number("corelia.internal.timeout-ms", 60000)))
-                            .header("Content-Type", "application/json")
+                            .header("Content-Type", contentType)
                             .header("Accept", "application/json")
-                            .method(
-                                    method,
-                                    bytes.length == 0
-                                            ? HttpRequest.BodyPublishers.noBody()
-                                            : HttpRequest.BodyPublishers.ofByteArray(bytes));
+                            .method(method, body);
             if (auth != null) request.header("Authorization", auth.authorization());
             String requestId = MDC.get("requestId");
             if (requestId != null && !requestId.isBlank())

@@ -52,15 +52,25 @@ public class PlatformHttp {
 
     public HttpResponse<byte[]> raw(
             String url, String method, byte[] body, Map<String, String> headers) {
+        return raw(
+                url,
+                method,
+                body.length == 0
+                        ? HttpRequest.BodyPublishers.noBody()
+                        : HttpRequest.BodyPublishers.ofByteArray(body),
+                headers);
+    }
+
+    public HttpResponse<byte[]> raw(
+            String url,
+            String method,
+            HttpRequest.BodyPublisher body,
+            Map<String, String> headers) {
         try {
             var builder =
                     HttpRequest.newBuilder(URI.create(url))
                             .timeout(Duration.ofSeconds(30))
-                            .method(
-                                    method,
-                                    body.length == 0
-                                            ? HttpRequest.BodyPublishers.noBody()
-                                            : HttpRequest.BodyPublishers.ofByteArray(body));
+                            .method(method, body);
             headers.forEach(builder::header);
             var response = client.send(builder.build(), HttpResponse.BodyHandlers.ofByteArray());
             int status = response.statusCode();
