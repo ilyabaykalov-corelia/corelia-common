@@ -23,6 +23,11 @@ public class ApiErrors {
         return ResponseEntity.status(error.status()).body(object("message", error.getMessage()));
     }
 
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<JsonNode> missing() {
+        return ResponseEntity.status(404).body(object("message", "Маршрут не найден"));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<JsonNode> unexpected(Exception error) {
         LOG.error("Непредвиденная ошибка обработки API: {}", error.getClass().getName());

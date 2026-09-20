@@ -8,6 +8,8 @@ import org.springframework.stereotype.Component;
 import ru.corelia.auth.AuthContext;
 import ru.corelia.config.CoreliaConfig;
 import ru.corelia.http.ApiException;
+import ru.corelia.observability.CoreliaObservability;
+import ru.corelia.observability.TraceContextPropagation;
 import ru.corelia.support.LogJson;
 
 import tools.jackson.databind.JsonNode;
@@ -37,10 +39,17 @@ public class ServiceClient implements AutoCloseable {
     }
 
     private final CoreliaConfig config;
+    private final TraceContextPropagation traceContext;
+    private final CoreliaObservability observability;
     private volatile HttpClient client;
 
-    public ServiceClient(CoreliaConfig config) {
+    public ServiceClient(
+            CoreliaConfig config,
+            TraceContextPropagation traceContext,
+            CoreliaObservability observability) {
         this.config = config;
+        this.traceContext = traceContext;
+        this.observability = observability;
     }
 
     private synchronized HttpClient client() {
@@ -98,15 +107,25 @@ public class ServiceClient implements AutoCloseable {
                     .header("Accept", "*/*")
                     .GET();
             if (auth != null) request.header("Authorization", auth.authorization());
+            traceContext.inject(request);
             var response = client().send(request.build(), HttpResponse.BodyHandlers.ofInputStream());
-            if (response.statusCode() >= 200 && response.statusCode() < 300) return response;
+            if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                observability.externalRequest("corelia-" + target, "internal", "success");
+                return response;
+            }
             try (var body = response.body()) {
+                observability.externalRequest("corelia-" + target, "internal", "error");
                 throw new ApiException(response.statusCode(), "Ошибка внутреннего сервиса " + target);
             }
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();
+            observability.externalRequest("corelia-" + target, "internal", "error");
             throw new ApiException(503, "Вызов сервиса прерван");
         } catch (IOException error) {
+            observability.externalRequest(
+                    "corelia-" + target,
+                    "internal",
+                    error instanceof HttpTimeoutException ? "timeout" : "error");
             throw new ApiException(502, "Сервис " + target + " недоступен");
         }
     }
@@ -210,6 +229,7 @@ public class ServiceClient implements AutoCloseable {
                             .header("Accept", "application/json")
                             .method(method, body);
             if (auth != null) request.header("Authorization", auth.authorization());
+            traceContext.inject(request);
             String requestId = MDC.get("requestId");
             if (requestId != null && !requestId.isBlank())
                 request.header("X-Request-Id", requestId);
@@ -226,6 +246,7 @@ public class ServiceClient implements AutoCloseable {
                                 : response.statusCode(),
                         message);
             }
+            observability.externalRequest("corelia-" + target, "internal", "success");
             LogJson.info(
                     "Corelia service completed",
                     object(
@@ -236,6 +257,7 @@ public class ServiceClient implements AutoCloseable {
                             "durationMs", (System.nanoTime() - startedAt) / 1_000_000));
             return response;
         } catch (ApiException error) {
+            observability.externalRequest("corelia-" + target, "internal", "error");
             LogJson.info(
                     "Corelia service failed",
                     object(
@@ -247,6 +269,7 @@ public class ServiceClient implements AutoCloseable {
                             "message", error.getMessage()));
             throw error;
         } catch (HttpTimeoutException error) {
+            observability.externalRequest("corelia-" + target, "internal", "timeout");
             LogJson.info(
                     "Corelia service failed",
                     object(
@@ -259,6 +282,7 @@ public class ServiceClient implements AutoCloseable {
             throw new ApiException(504, "Истекло время ожидания сервиса " + target);
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();
+            observability.externalRequest("corelia-" + target, "internal", "error");
             LogJson.info(
                     "Corelia service failed",
                     object(
@@ -270,6 +294,7 @@ public class ServiceClient implements AutoCloseable {
                             "message", "Вызов сервиса прерван"));
             throw new ApiException(503, "Вызов сервиса прерван");
         } catch (IOException error) {
+            observability.externalRequest("corelia-" + target, "internal", "error");
             LogJson.info(
                     "Corelia service failed",
                     object(
