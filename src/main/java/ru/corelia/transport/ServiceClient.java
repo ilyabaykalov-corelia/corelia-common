@@ -8,6 +8,8 @@ import org.springframework.stereotype.Component;
 import ru.corelia.auth.AuthContext;
 import ru.corelia.config.CoreliaConfig;
 import ru.corelia.http.ApiException;
+import ru.corelia.observability.CoreliaObservability;
+import ru.corelia.observability.TraceContextPropagation;
 import ru.corelia.support.LogJson;
 
 import tools.jackson.databind.JsonNode;
@@ -37,10 +39,17 @@ public class ServiceClient implements AutoCloseable {
     }
 
     private final CoreliaConfig config;
+    private final TraceContextPropagation traceContext;
+    private final CoreliaObservability observability;
     private volatile HttpClient client;
 
-    public ServiceClient(CoreliaConfig config) {
+    public ServiceClient(
+            CoreliaConfig config,
+            TraceContextPropagation traceContext,
+            CoreliaObservability observability) {
         this.config = config;
+        this.traceContext = traceContext;
+        this.observability = observability;
     }
 
     private synchronized HttpClient client() {
@@ -76,6 +85,125 @@ public class ServiceClient implements AutoCloseable {
 
     public HttpResponse<byte[]> raw(
             String target, String path, String method, byte[] bytes, AuthContext auth) {
+        return raw(
+                target,
+                path,
+                method,
+                bytes.length == 0
+                        ? HttpRequest.BodyPublishers.noBody()
+                        : HttpRequest.BodyPublishers.ofByteArray(bytes),
+                "application/json",
+                auth);
+    }
+
+    public HttpResponse<InputStream> rawStream(String target, String path, AuthContext auth) {
+        String base = config.required("corelia.services." + target, config.value("corelia.services." + target));
+        URI uri = URI.create(base + path);
+        if (!uri.getScheme().equals("https") || !path.startsWith("/internal/v1/"))
+            throw new IllegalStateException("Внутренний адрес должен использовать HTTPS");
+        try {
+            var request = HttpRequest.newBuilder(uri)
+                    .timeout(Duration.ofMillis(config.number("corelia.internal.timeout-ms", 60000)))
+                    .header("Accept", "*/*")
+                    .GET();
+            if (auth != null) request.header("Authorization", auth.authorization());
+            traceContext.inject(request);
+            var response = client().send(request.build(), HttpResponse.BodyHandlers.ofInputStream());
+            if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                observability.externalRequest("corelia-" + target, "internal", "success");
+                return response;
+            }
+            try (var body = response.body()) {
+                observability.externalRequest("corelia-" + target, "internal", "error");
+                throw new ApiException(response.statusCode(), "Ошибка внутреннего сервиса " + target);
+            }
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            observability.externalRequest("corelia-" + target, "internal", "error");
+            throw new ApiException(503, "Вызов сервиса прерван");
+        } catch (IOException error) {
+            observability.externalRequest(
+                    "corelia-" + target,
+                    "internal",
+                    error instanceof HttpTimeoutException ? "timeout" : "error");
+            throw new ApiException(502, "Сервис " + target + " недоступен");
+        }
+    }
+
+    public JsonNode callMultipart(
+            String target,
+            String path,
+            String method,
+            String requestId,
+            String fileName,
+            String fileContentType,
+            InputStream file,
+            AuthContext auth) {
+        return callMultipart(
+                target,
+                path,
+                method,
+                Map.of("requestId", requestId),
+                fileName,
+                fileContentType,
+                file,
+                auth);
+    }
+
+    public JsonNode callMultipart(
+            String target,
+            String path,
+            String method,
+            Map<String, String> fields,
+            String fileName,
+            String fileContentType,
+            InputStream file,
+            AuthContext auth) {
+        String boundary = "Corelia" + UUID.randomUUID().toString().replace("-", "");
+        StringBuilder form = new StringBuilder();
+        fields.forEach(
+                (name, value) ->
+                        form.append("--").append(boundary)
+                                .append("\r\nContent-Disposition: form-data; name=\"")
+                                .append(name).append("\"\r\n\r\n")
+                                .append(value).append("\r\n"));
+        byte[] prefix =
+                (form
+                                .append("--")
+                                + boundary
+                                + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\""
+                                + fileName.replace("\r", "%0D").replace("\n", "%0A").replace("\"", "%22")
+                                + "\"\r\nContent-Type: "
+                                + fileContentType.replace("\r", "").replace("\n", "")
+                                + "\r\n\r\n")
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] suffix = ("\r\n--" + boundary + "--\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        var response =
+                raw(
+                        target,
+                        path,
+                        method,
+                        HttpRequest.BodyPublishers.concat(
+                                HttpRequest.BodyPublishers.ofByteArray(prefix),
+                                HttpRequest.BodyPublishers.ofInputStream(() -> file),
+                                HttpRequest.BodyPublishers.ofByteArray(suffix)),
+                        "multipart/form-data; boundary=" + boundary,
+                        auth);
+        if (response.body().length == 0) return object();
+        try {
+            return MAPPER.readTree(response.body());
+        } catch (RuntimeException error) {
+            throw new ApiException(502, "Сервис " + target + " вернул некорректный JSON");
+        }
+    }
+
+    private HttpResponse<byte[]> raw(
+            String target,
+            String path,
+            String method,
+            HttpRequest.BodyPublisher body,
+            String contentType,
+            AuthContext auth) {
         String base =
                 config.required(
                         "corelia.services." + target, config.value("corelia.services." + target));
@@ -97,14 +225,11 @@ public class ServiceClient implements AutoCloseable {
                             .timeout(
                                     Duration.ofMillis(
                                             config.number("corelia.internal.timeout-ms", 60000)))
-                            .header("Content-Type", "application/json")
+                            .header("Content-Type", contentType)
                             .header("Accept", "application/json")
-                            .method(
-                                    method,
-                                    bytes.length == 0
-                                            ? HttpRequest.BodyPublishers.noBody()
-                                            : HttpRequest.BodyPublishers.ofByteArray(bytes));
+                            .method(method, body);
             if (auth != null) request.header("Authorization", auth.authorization());
+            traceContext.inject(request);
             String requestId = MDC.get("requestId");
             if (requestId != null && !requestId.isBlank())
                 request.header("X-Request-Id", requestId);
@@ -121,6 +246,7 @@ public class ServiceClient implements AutoCloseable {
                                 : response.statusCode(),
                         message);
             }
+            observability.externalRequest("corelia-" + target, "internal", "success");
             LogJson.info(
                     "Corelia service completed",
                     object(
@@ -131,6 +257,7 @@ public class ServiceClient implements AutoCloseable {
                             "durationMs", (System.nanoTime() - startedAt) / 1_000_000));
             return response;
         } catch (ApiException error) {
+            observability.externalRequest("corelia-" + target, "internal", "error");
             LogJson.info(
                     "Corelia service failed",
                     object(
@@ -142,6 +269,7 @@ public class ServiceClient implements AutoCloseable {
                             "message", error.getMessage()));
             throw error;
         } catch (HttpTimeoutException error) {
+            observability.externalRequest("corelia-" + target, "internal", "timeout");
             LogJson.info(
                     "Corelia service failed",
                     object(
@@ -154,6 +282,7 @@ public class ServiceClient implements AutoCloseable {
             throw new ApiException(504, "Истекло время ожидания сервиса " + target);
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();
+            observability.externalRequest("corelia-" + target, "internal", "error");
             LogJson.info(
                     "Corelia service failed",
                     object(
@@ -165,6 +294,7 @@ public class ServiceClient implements AutoCloseable {
                             "message", "Вызов сервиса прерван"));
             throw new ApiException(503, "Вызов сервиса прерван");
         } catch (IOException error) {
+            observability.externalRequest("corelia-" + target, "internal", "error");
             LogJson.info(
                     "Corelia service failed",
                     object(

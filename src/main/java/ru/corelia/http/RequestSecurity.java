@@ -56,9 +56,12 @@ public class RequestSecurity extends OncePerRequestFilter {
         MDC.put("requestId", requestId);
         try {
             if (gateway) {
-                response.setHeader("Access-Control-Allow-Origin", config.value("CORS_ORIGIN", "*"));
-                response.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-                response.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+                String corsOrigin = config.value("CORS_ORIGIN");
+                if (!corsOrigin.isBlank()) {
+                    response.setHeader("Access-Control-Allow-Origin", corsOrigin);
+                    response.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+                    response.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+                }
                 if (request.getMethod().equals("OPTIONS")) {
                     response.setStatus(204);
                     return;
@@ -76,17 +79,7 @@ public class RequestSecurity extends OncePerRequestFilter {
                                             "/api/core/v1/health",
                                             "/internal/v1/health")
                                     .contains(path);
-            boolean login =
-                    request.getMethod().equals("POST")
-                            && Set.of(
-                                            "/api/core/v1/auth/login",
-                                            "/api/core/v1/auth/refresh",
-                                            "/api/core/v1/auth/logout",
-                                            "/internal/v1/auth/login",
-                                            "/internal/v1/auth/refresh",
-                                            "/internal/v1/auth/logout")
-                                    .contains(path);
-            if (!health && !login)
+            if (!health)
                 request.setAttribute(
                         AUTH, verifier.authenticate(request.getHeader("Authorization")));
             if (request.getMethod().equals("HEAD"))
@@ -150,12 +143,16 @@ public class RequestSecurity extends OncePerRequestFilter {
             throw new ApiException(403, "Сервису вложений разрешены чтение и команды состава документа");
         if (path.endsWith("/attachment-commands") && !peer.equals("corelia-attachment-service"))
             throw new ApiException(403, "Команды метаданных принимаются только от сервиса вложений");
-        if (path.startsWith("/internal/v1/initial-attachments/") && !peer.equals("corelia-document-service"))
+        if ((path.startsWith("/internal/v1/initial-attachments/")
+                        || path.startsWith("/internal/v1/staged-attachments/"))
+                && !peer.equals("corelia-document-service"))
             throw new ApiException(403, "Подготовка первого файла доступна только сервису документов");
         if (peer.equals("corelia-document-service")
                 && !path.startsWith("/internal/v1/process")
                 && !path.equals("/internal/v1/health")
-                && !(service.equals("corelia-attachment-service") && request.getMethod().equals("POST") && path.matches("/internal/v1/initial-attachments/[^/]+"))
+                && !(service.equals("corelia-attachment-service")
+                        && request.getMethod().equals("POST")
+                        && path.matches("/internal/v1/(initial-attachments|staged-attachments)/[^/]+"))
                 && !(request.getMethod().equals("GET") && path.matches("/internal/v1/documents/[^/]+/[^/]+/workflow")))
             throw new ApiException(403, "Сервис документов может запускать процессы и читать их состояние");
     }
