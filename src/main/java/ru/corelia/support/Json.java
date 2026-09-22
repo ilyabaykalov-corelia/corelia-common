@@ -9,7 +9,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
-/** Работа с изменяемыми контрактами Platform V без потери неизвестных полей задач. */
+/** Работа с изменяемыми JSON-контрактами без потери неизвестных полей. */
 public final class Json {
     public static final JsonMapper MAPPER = JsonMapper.builder().build();
 

@@ -36,14 +36,12 @@ public class CoreliaConfig extends CoreliaRuntimeConfig {
     public String required(String name, String value) {
         if (value == null || value.isBlank())
             throw new ApiException(
-                    503, "Не настроен параметр " + name + " для интеграции с Platform V");
+                    503, "Не настроен параметр " + name + " для Corelia");
         return value;
     }
 
     public String issuer() {
-        return value(
-                "CORELIA_AUTH_ISSUER",
-                value("PLATFORM_V_KEYCLOAK_ISSUER", trim(value("PLATFORM_V_KEYCLOAK_BASE_URL"))));
+        return value("CORELIA_AUTH_ISSUER");
     }
 
     public String audience() {
