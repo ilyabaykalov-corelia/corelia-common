@@ -17,5 +17,8 @@ public class CoreliaRuntimeConfig {
         try { return Long.parseLong(value); }
         catch (NumberFormatException error) { throw new IllegalArgumentException("Некорректный числовой параметр " + name); }
     }
-    public String provider() { return value("CORELIA_PROVIDER", "platform-v"); }
+    public String provider() {
+        String selected = value("CORELIA_PROVIDER");
+        return selected.isBlank() ? value("corelia.provider", "platform-v") : selected;
+    }
 }
