@@ -8,5 +8,5 @@ import org.springframework.stereotype.Component;
 public class CoreliaAuthConfig {
     private final Environment environment;
     public CoreliaAuthConfig(Environment environment) { this.environment = environment; }
-    public String jwksUrl() { return environment.getProperty("CORELIA_AUTH_JWKS_URL", environment.getProperty("PLATFORM_V_KEYCLOAK_JWKS_URL", "")); }
+    public String jwksUrl() { return environment.getProperty("CORELIA_AUTH_JWKS_URL", ""); }
 }

@@ -5,7 +5,6 @@ import static ru.corelia.support.Json.*;
 import org.springframework.stereotype.Service;
 
 import ru.corelia.config.CoreliaConfig;
-import ru.corelia.config.CoreliaAuthConfig;
 import ru.corelia.http.ApiException;
 import ru.corelia.transport.ProviderHttp;
 
@@ -22,14 +21,14 @@ import java.util.*;
 public class JwtVerifier {
     private static final long CLOCK_SKEW_SECONDS = 30;
     private final CoreliaConfig config;
-    private final CoreliaAuthConfig authConfig;
+    private final AuthKeyProvider authKeys;
     private final ProviderHttp http;
     private List<JsonNode> keys = List.of();
     private long keysExpireAt;
 
-    public JwtVerifier(CoreliaConfig config, CoreliaAuthConfig authConfig, ProviderHttp http) {
+    public JwtVerifier(CoreliaConfig config, AuthKeyProvider authKeys, ProviderHttp http) {
         this.config = config;
-        this.authConfig = authConfig;
+        this.authKeys = authKeys;
         this.http = http;
     }
 
@@ -108,7 +107,7 @@ public class JwtVerifier {
     private void loadKeys() {
         var payload =
                 http.json(
-                        config.required("CORELIA_AUTH_JWKS_URL", authConfig.jwksUrl()),
+                        authKeys.jwksUrl(),
                         "GET",
                         null,
                         Map.of("Accept", "application/json"));
