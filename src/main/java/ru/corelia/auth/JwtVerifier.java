@@ -7,7 +7,7 @@ import org.springframework.stereotype.Service;
 import ru.corelia.config.CoreliaConfig;
 import ru.corelia.config.CoreliaAuthConfig;
 import ru.corelia.http.ApiException;
-import ru.corelia.integration.PlatformHttp;
+import ru.corelia.transport.ProviderHttp;
 
 import tools.jackson.databind.JsonNode;
 
@@ -23,11 +23,11 @@ public class JwtVerifier {
     private static final long CLOCK_SKEW_SECONDS = 30;
     private final CoreliaConfig config;
     private final CoreliaAuthConfig authConfig;
-    private final PlatformHttp http;
+    private final ProviderHttp http;
     private List<JsonNode> keys = List.of();
     private long keysExpireAt;
 
-    public JwtVerifier(CoreliaConfig config, CoreliaAuthConfig authConfig, PlatformHttp http) {
+    public JwtVerifier(CoreliaConfig config, CoreliaAuthConfig authConfig, ProviderHttp http) {
         this.config = config;
         this.authConfig = authConfig;
         this.http = http;
