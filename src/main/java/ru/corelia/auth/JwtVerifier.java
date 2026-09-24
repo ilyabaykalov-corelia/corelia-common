@@ -4,9 +4,8 @@ import static ru.corelia.support.Json.*;
 
 import org.springframework.stereotype.Service;
 
-import ru.corelia.config.CoreliaConfig;
 import ru.corelia.http.ApiException;
-import ru.corelia.integration.PlatformHttp;
+import ru.corelia.transport.ProviderHttp;
 
 import tools.jackson.databind.JsonNode;
 
@@ -20,13 +19,15 @@ import java.util.*;
 @Service
 public class JwtVerifier {
     private static final long CLOCK_SKEW_SECONDS = 30;
-    private final CoreliaConfig config;
-    private final PlatformHttp http;
+    private final AuthIdentityProvider identity;
+    private final AuthKeyProvider authKeys;
+    private final ProviderHttp http;
     private List<JsonNode> keys = List.of();
     private long keysExpireAt;
 
-    public JwtVerifier(CoreliaConfig config, PlatformHttp http) {
-        this.config = config;
+    public JwtVerifier(AuthIdentityProvider identity, AuthKeyProvider authKeys, ProviderHttp http) {
+        this.identity = identity;
+        this.authKeys = authKeys;
         this.http = http;
     }
 
@@ -42,10 +43,11 @@ public class JwtVerifier {
         JsonNode header = decode(parts[0]);
         JsonNode payload = decode(parts[1]);
         if (!"RS256".equals(text(header, "alg")) || !header.path("kid").isTextual()) invalidToken();
-        String issuer = config.required("PLATFORM_V_KEYCLOAK_ISSUER", config.issuer());
+        String issuer = identity.issuer();
+        if (issuer.isBlank()) throw new ApiException(503, "Не настроен issuer provider-а авторизации");
         if (!issuer.equals(payload.path("iss").asString("")))
             throw new ApiException(401, "Keycloak access token выпущен неизвестным issuer");
-        Set<String> audiences = config.audiences();
+        Set<String> audiences = identity.audiences();
         if (!stringValues(payload.path("aud")).stream()
                 .map(node -> text(node))
                 .anyMatch(audiences::contains)) {
@@ -105,9 +107,7 @@ public class JwtVerifier {
     private void loadKeys() {
         var payload =
                 http.json(
-                        config.required(
-                                "PLATFORM_V_KEYCLOAK_JWKS_URL",
-                                config.value("CORELIA_AUTH_JWKS_URL", config.keycloak("JWKS"))),
+                        authKeys.jwksUrl(),
                         "GET",
                         null,
                         Map.of("Accept", "application/json"));

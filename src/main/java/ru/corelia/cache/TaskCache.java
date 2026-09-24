@@ -72,8 +72,8 @@ public class TaskCache {
         String key;
         try {
             String generation = redis.sync().get(GENERATION);
-            // Ключ включает токен и адреса платформы: исключено смешивание пользователей и стендов.
-            String namespace = UserCache.hash(config.dataspace() + "|" + config.bpmu());
+            // Ключ включает выбранный provider: исключено смешивание пользователей и стендов.
+            String namespace = UserCache.hash(config.provider());
             key =
                     "corelia:task-cache:"
                             + namespace

@@ -37,7 +37,7 @@ public record AuthContext(
             throw new ApiException(401, "В Keycloak access token отсутствует имя пользователя");
         if (roles.isEmpty())
             throw new ApiException(
-                    403, "В Keycloak access token отсутствуют роли для вызова BPMU Task List");
+                    403, "В access token отсутствуют роли для поиска задач provider-а");
         return Map.of("X-Username", taskUsername, "X-Roles", String.join(",", roles));
     }
 

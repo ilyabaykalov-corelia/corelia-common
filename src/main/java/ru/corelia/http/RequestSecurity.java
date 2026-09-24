@@ -139,7 +139,7 @@ public class RequestSecurity extends OncePerRequestFilter {
         if (peer.equals("corelia-attachment-service")
                 && !path.equals("/internal/v1/health")
                 && !request.getMethod().equals("GET")
-                && !(request.getMethod().equals("POST") && path.matches("/internal/v1/documents/[^/]+/[^/]+/attachment-commands")))
+                && !(request.getMethod().equals("POST") && path.matches("/internal/v1/documents/[^/]+/[^/]+/(attachment-commands|workflow-readiness)")))
             throw new ApiException(403, "Сервису вложений разрешены чтение и команды состава документа");
         if (path.endsWith("/attachment-commands") && !peer.equals("corelia-attachment-service"))
             throw new ApiException(403, "Команды метаданных принимаются только от сервиса вложений");
@@ -152,7 +152,8 @@ public class RequestSecurity extends OncePerRequestFilter {
                 && !path.equals("/internal/v1/health")
                 && !(service.equals("corelia-attachment-service")
                         && request.getMethod().equals("POST")
-                        && path.matches("/internal/v1/(initial-attachments|staged-attachments)/[^/]+"))
+                        && (path.matches("/internal/v1/(initial-attachments|staged-attachments)/[^/]+")
+                        || path.matches("/internal/v1/documents/[^/]+/[^/]+/attachments")))
                 && !(request.getMethod().equals("GET") && path.matches("/internal/v1/documents/[^/]+/[^/]+/workflow")))
             throw new ApiException(403, "Сервис документов может запускать процессы и читать их состояние");
     }
