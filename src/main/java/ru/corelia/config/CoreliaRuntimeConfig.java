@@ -21,4 +21,15 @@ public class CoreliaRuntimeConfig {
         String selected = value("CORELIA_PROVIDER");
         return selected.isBlank() ? value("corelia.provider", "platform-v") : selected;
     }
+    /**
+     * Возвращает provider отдельной capability с временным fallback на прежний
+     * единый выбор provider. Имя capability передаётся в kebab-case.
+     */
+    public String provider(String capability) {
+        if (capability == null || capability.isBlank()) throw new IllegalArgumentException("Не указана capability provider");
+        String normalized = capability.trim().toLowerCase(java.util.Locale.ROOT);
+        String environmentName = "CORELIA_PROVIDER_" + normalized.replace('-', '_').toUpperCase(java.util.Locale.ROOT);
+        String selected = value(environmentName);
+        return selected.isBlank() ? value("corelia.provider." + normalized, provider()) : selected;
+    }
 }
