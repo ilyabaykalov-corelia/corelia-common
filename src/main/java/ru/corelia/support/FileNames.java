@@ -5,7 +5,7 @@ public final class FileNames {
     private FileNames() {}
 
     public static String safe(String name) {
-        String result = name.replaceAll("[\\\\/\\x00]", "_").trim();
+        String result = name.replaceAll("[\\\\/\\p{Cntrl}]", "_").trim();
         return result.isEmpty() ? "attachment.bin" : result;
     }
 }
