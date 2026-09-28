@@ -233,7 +233,10 @@ public class ServiceClient implements AutoCloseable {
             String requestId = MDC.get("requestId");
             if (requestId != null && !requestId.isBlank())
                 request.header("X-Request-Id", requestId);
-            var response = client().send(request.build(), HttpResponse.BodyHandlers.ofByteArray());
+            var response =
+                    UpstreamResponse.read(
+                            client().send(request.build(), HttpResponse.BodyHandlers.ofInputStream()),
+                            UpstreamResponse.maxResponseBytes(config));
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 String message = "Ошибка внутреннего сервиса " + target;
                 try {
