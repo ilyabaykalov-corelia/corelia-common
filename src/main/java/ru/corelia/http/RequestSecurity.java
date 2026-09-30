@@ -132,7 +132,10 @@ public class RequestSecurity extends OncePerRequestFilter {
         }
         Set<String> allowed = new HashSet<>(List.of("corelia-gateway"));
         if (service.equals("corelia-workflow-service") || service.equals("corelia-attachment-service")) allowed.add("corelia-document-service");
-        if (service.equals("corelia-document-service")) allowed.add("corelia-attachment-service");
+        if (service.equals("corelia-document-service")) {
+            allowed.add("corelia-attachment-service");
+            allowed.add("corelia-workflow-service");
+        }
         if (path.equals("/internal/v1/health")) allowed.add(service);
         if (!allowed.contains(peer))
             throw new ApiException(403, "Сервису запрещён доступ к этому API");
@@ -141,6 +144,10 @@ public class RequestSecurity extends OncePerRequestFilter {
                 && !request.getMethod().equals("GET")
                 && !(request.getMethod().equals("POST") && path.matches("/internal/v1/documents/[^/]+/[^/]+/(attachment-commands|workflow-readiness)")))
             throw new ApiException(403, "Сервису вложений разрешены чтение и команды состава документа");
+        if (peer.equals("corelia-workflow-service")
+                && !(request.getMethod().equals("GET") && path.matches("/internal/v1/documents/[^/]+/[^/]+"))
+                && !(request.getMethod().equals("POST") && path.matches("/internal/v1/documents/[^/]+/[^/]+/workflow-commands/[^/]+")))
+            throw new ApiException(403, "Сервису workflow разрешены чтение документа и workflow-команды");
         if (path.endsWith("/attachment-commands") && !peer.equals("corelia-attachment-service"))
             throw new ApiException(403, "Команды метаданных принимаются только от сервиса вложений");
         if ((path.startsWith("/internal/v1/initial-attachments/")
