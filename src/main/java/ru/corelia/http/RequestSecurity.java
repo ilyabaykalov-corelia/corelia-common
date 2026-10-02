@@ -136,7 +136,10 @@ public class RequestSecurity extends OncePerRequestFilter {
             throw new ApiException(401, "Некорректный сертификат сервиса");
         }
         Set<String> allowed = new HashSet<>(List.of("corelia-gateway"));
-        if (service.equals("corelia-data-service")) allowed.add("corelia-document-service");
+        if (service.equals("corelia-data-service")) {
+            allowed.add("corelia-document-service");
+            allowed.add("corelia-workflow-service");
+        }
         if (service.equals("corelia-workflow-service") || service.equals("corelia-attachment-service")) allowed.add("corelia-document-service");
         if (service.equals("corelia-document-service")) {
             allowed.add("corelia-attachment-service");
@@ -147,7 +150,9 @@ public class RequestSecurity extends OncePerRequestFilter {
             throw new ApiException(403, "Сервису запрещён доступ к этому API");
         if (service.equals("corelia-data-service")
                 && !path.equals("/internal/v1/health")
-                && !peer.equals("corelia-document-service"))
+                && !peer.equals("corelia-document-service")
+                && !(peer.equals("corelia-workflow-service")
+                        && request.getMethod().equals("GET")))
             throw new ApiException(403, "Сервису запрещён доступ к этому API");
         if (peer.equals("corelia-attachment-service")
                 && !path.equals("/internal/v1/health")
@@ -155,6 +160,9 @@ public class RequestSecurity extends OncePerRequestFilter {
                 && !(request.getMethod().equals("POST") && path.matches("/internal/v1/documents/[^/]+/[^/]+/(attachment-commands|workflow-readiness)")))
             throw new ApiException(403, "Сервису вложений разрешены чтение и команды состава документа");
         if (peer.equals("corelia-workflow-service")
+                && !(service.equals("corelia-data-service")
+                        && request.getMethod().equals("GET")
+                        && path.startsWith("/internal/v1/data/"))
                 && !(request.getMethod().equals("GET") && path.matches("/internal/v1/documents/[^/]+/[^/]+"))
                 && !(request.getMethod().equals("POST") && path.matches("/internal/v1/documents/[^/]+/[^/]+/workflow-commands/[^/]+")))
             throw new ApiException(403, "Сервису workflow разрешены чтение документа и workflow-команды");
