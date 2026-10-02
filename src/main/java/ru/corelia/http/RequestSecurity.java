@@ -167,6 +167,8 @@ public class RequestSecurity extends OncePerRequestFilter {
         if (peer.equals("corelia-document-service")
                 && !path.startsWith("/internal/v1/process")
                 && !path.equals("/internal/v1/health")
+                && !(service.equals("corelia-data-service")
+                        && path.startsWith("/internal/v1/data/"))
                 && !(service.equals("corelia-attachment-service")
                         && request.getMethod().equals("POST")
                         && (path.matches("/internal/v1/(initial-attachments|staged-attachments)/[^/]+")
