@@ -136,6 +136,7 @@ public class RequestSecurity extends OncePerRequestFilter {
             throw new ApiException(401, "Некорректный сертификат сервиса");
         }
         Set<String> allowed = new HashSet<>(List.of("corelia-gateway"));
+        if (service.equals("corelia-data-service")) allowed.add("corelia-document-service");
         if (service.equals("corelia-workflow-service") || service.equals("corelia-attachment-service")) allowed.add("corelia-document-service");
         if (service.equals("corelia-document-service")) {
             allowed.add("corelia-attachment-service");
@@ -143,6 +144,10 @@ public class RequestSecurity extends OncePerRequestFilter {
         }
         if (path.equals("/internal/v1/health")) allowed.add(service);
         if (!allowed.contains(peer))
+            throw new ApiException(403, "Сервису запрещён доступ к этому API");
+        if (service.equals("corelia-data-service")
+                && !path.equals("/internal/v1/health")
+                && !peer.equals("corelia-document-service"))
             throw new ApiException(403, "Сервису запрещён доступ к этому API");
         if (peer.equals("corelia-attachment-service")
                 && !path.equals("/internal/v1/health")
