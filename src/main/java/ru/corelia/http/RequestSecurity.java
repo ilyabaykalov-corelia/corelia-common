@@ -139,6 +139,7 @@ public class RequestSecurity extends OncePerRequestFilter {
         if (service.equals("corelia-data-service")) {
             allowed.add("corelia-document-service");
             allowed.add("corelia-workflow-service");
+            allowed.add("corelia-attachment-service");
         }
         if (service.equals("corelia-workflow-service") || service.equals("corelia-attachment-service")) allowed.add("corelia-document-service");
         if (service.equals("corelia-document-service")) {
@@ -152,7 +153,10 @@ public class RequestSecurity extends OncePerRequestFilter {
                 && !path.equals("/internal/v1/health")
                 && !peer.equals("corelia-document-service")
                 && !(peer.equals("corelia-workflow-service")
-                        && request.getMethod().equals("GET")))
+                        && request.getMethod().equals("GET"))
+                && !(peer.equals("corelia-attachment-service")
+                        && request.getMethod().equals("GET")
+                        && path.startsWith("/internal/v1/data/documents/attachments/")))
             throw new ApiException(403, "Сервису запрещён доступ к этому API");
         if (peer.equals("corelia-attachment-service")
                 && !path.equals("/internal/v1/health")
