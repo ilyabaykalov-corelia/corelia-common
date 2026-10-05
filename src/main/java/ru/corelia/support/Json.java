@@ -17,8 +17,10 @@ public final class Json {
 
     public static ObjectNode object(Object... pairs) {
         ObjectNode node = MAPPER.createObjectNode();
-        for (int i = 0; i < pairs.length; i += 2)
-            node.set((String) pairs[i], MAPPER.valueToTree(pairs[i + 1]));
+        for (int i = 0; i < pairs.length; i += 2) {
+            Object value = pairs[i + 1];
+            node.set((String) pairs[i], value instanceof JsonNode json ? json.deepCopy() : MAPPER.valueToTree(value));
+        }
         return node;
     }
 

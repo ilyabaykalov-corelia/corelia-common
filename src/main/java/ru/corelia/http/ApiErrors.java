@@ -30,7 +30,7 @@ public class ApiErrors {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<JsonNode> unexpected(Exception error) {
-        LOG.error("Непредвиденная ошибка обработки API: {}", error.getClass().getName());
+        LOG.error("Непредвиденная ошибка обработки API", error);
         LogJson.info(
                 "API request error",
                 object(
