@@ -153,7 +153,9 @@ public class RequestSecurity extends OncePerRequestFilter {
                 && !path.equals("/internal/v1/health")
                 && !peer.equals("corelia-document-service")
                 && !(peer.equals("corelia-workflow-service")
-                        && request.getMethod().equals("GET"))
+                        && (request.getMethod().equals("GET")
+                                || request.getMethod().equals("POST")
+                                && path.equals("/internal/v1/data/documents/search")))
                 && !(peer.equals("corelia-attachment-service")
                         && request.getMethod().equals("GET")
                         && path.startsWith("/internal/v1/data/documents/attachments/")))
@@ -165,8 +167,10 @@ public class RequestSecurity extends OncePerRequestFilter {
             throw new ApiException(403, "Сервису вложений разрешены чтение и команды состава документа");
         if (peer.equals("corelia-workflow-service")
                 && !(service.equals("corelia-data-service")
-                        && request.getMethod().equals("GET")
-                        && path.startsWith("/internal/v1/data/"))
+                        && ((request.getMethod().equals("GET")
+                                && path.startsWith("/internal/v1/data/"))
+                                || (request.getMethod().equals("POST")
+                                && path.equals("/internal/v1/data/documents/search"))))
                 && !(request.getMethod().equals("GET") && path.matches("/internal/v1/documents/[^/]+/[^/]+"))
                 && !(request.getMethod().equals("POST") && path.matches("/internal/v1/documents/[^/]+/[^/]+/workflow-commands/[^/]+")))
             throw new ApiException(403, "Сервису workflow разрешены чтение документа и workflow-команды");
