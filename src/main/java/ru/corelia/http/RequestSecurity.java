@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import ru.corelia.auth.JwtVerifier;
+import ru.corelia.auth.AuthContext;
 import ru.corelia.config.CoreliaConfig;
 import ru.corelia.support.LogJson;
 
@@ -68,7 +69,7 @@ public class RequestSecurity extends OncePerRequestFilter {
                 }
             }
             String path = request.getRequestURI();
-            if (!gateway) authorizeService(request, path);
+            String peer = gateway ? "" : authorizeService(request, path);
             if (gateway && path.startsWith("/internal/"))
                 throw new ApiException(404, "Маршрут не найден");
             if (!gateway && !path.startsWith("/internal/v1/"))
@@ -79,9 +80,16 @@ public class RequestSecurity extends OncePerRequestFilter {
                                             "/api/core/v1/health",
                                             "/internal/v1/health")
                                     .contains(path);
-            if (!health)
-                request.setAttribute(
-                        AUTH, verifier.authenticate(request.getHeader("Authorization")));
+            if (!health) {
+                AuthContext auth = verifier.authenticate(request.getHeader("Authorization"));
+                if (service.equals("corelia-workflow-service")
+                        && peer.equals("corelia-document-service"))
+                    auth =
+                            auth.withTaskContext(
+                                    request.getHeader(AuthContext.INTERNAL_TASK_USERNAME_HEADER),
+                                    request.getHeader(AuthContext.INTERNAL_TASK_ROLES_HEADER));
+                request.setAttribute(AUTH, auth);
+            }
             if (request.getMethod().equals("HEAD"))
                 throw new ApiException(404, "Маршрут не найден");
             chain.doFilter(request, response);
@@ -117,7 +125,7 @@ public class RequestSecurity extends OncePerRequestFilter {
         }
     }
 
-    private void authorizeService(HttpServletRequest request, String path) {
+    private String authorizeService(HttpServletRequest request, String path) {
         X509Certificate[] certificates =
                 (X509Certificate[]) request.getAttribute("jakarta.servlet.request.X509Certificate");
         if (certificates == null || certificates.length == 0)
@@ -156,5 +164,6 @@ public class RequestSecurity extends OncePerRequestFilter {
                         || path.matches("/internal/v1/documents/[^/]+/[^/]+/attachments")))
                 && !(request.getMethod().equals("GET") && path.matches("/internal/v1/documents/[^/]+/[^/]+/workflow")))
             throw new ApiException(403, "Сервис документов может запускать процессы и читать их состояние");
+        return peer;
     }
 }

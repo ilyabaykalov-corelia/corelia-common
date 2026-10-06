@@ -106,7 +106,10 @@ public class ServiceClient implements AutoCloseable {
                     .timeout(Duration.ofMillis(config.number("corelia.internal.timeout-ms", 60000)))
                     .header("Accept", "*/*")
                     .GET();
-            if (auth != null) request.header("Authorization", auth.authorization());
+            if (auth != null) {
+                request.header("Authorization", auth.authorization());
+                auth.internalTaskContextHeaders().forEach(request::header);
+            }
             traceContext.inject(request);
             var response = client().send(request.build(), HttpResponse.BodyHandlers.ofInputStream());
             if (response.statusCode() >= 200 && response.statusCode() < 300) {
@@ -228,7 +231,10 @@ public class ServiceClient implements AutoCloseable {
                             .header("Content-Type", contentType)
                             .header("Accept", "application/json")
                             .method(method, body);
-            if (auth != null) request.header("Authorization", auth.authorization());
+            if (auth != null) {
+                request.header("Authorization", auth.authorization());
+                auth.internalTaskContextHeaders().forEach(request::header);
+            }
             traceContext.inject(request);
             String requestId = MDC.get("requestId");
             if (requestId != null && !requestId.isBlank())
