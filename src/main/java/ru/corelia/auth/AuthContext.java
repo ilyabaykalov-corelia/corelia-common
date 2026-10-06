@@ -18,6 +18,9 @@ public record AuthContext(
         String email,
         List<String> roles,
         String taskUsername) {
+    public static final String INTERNAL_TASK_USERNAME_HEADER = "X-Corelia-Task-Username";
+    public static final String INTERNAL_TASK_ROLES_HEADER = "X-Corelia-Task-Roles";
+
     public AuthContext {
         roles = List.copyOf(roles);
     }
@@ -39,6 +42,31 @@ public record AuthContext(
             throw new ApiException(
                     403, "В access token отсутствуют роли для поиска задач provider-а");
         return Map.of("X-Username", taskUsername, "X-Roles", String.join(",", roles));
+    }
+
+    /** Передает настроенный контекст задач только между Corelia-сервисами по mTLS. */
+    public Map<String, String> internalTaskContextHeaders() {
+        if (taskUsername.isEmpty() || roles.isEmpty()) return Map.of();
+        return Map.of(
+                INTERNAL_TASK_USERNAME_HEADER, taskUsername,
+                INTERNAL_TASK_ROLES_HEADER, String.join(",", roles));
+    }
+
+    /** Восстанавливает настроенный контекст задач после проверки mTLS вызывающего сервиса. */
+    public AuthContext withTaskContext(String forwardedTaskUsername, String forwardedRoles) {
+        if (forwardedTaskUsername == null
+                || forwardedTaskUsername.isBlank()
+                || forwardedRoles == null
+                || forwardedRoles.isBlank())
+            return this;
+        List<String> parsedRoles =
+                java.util.Arrays.stream(forwardedRoles.split(","))
+                        .map(String::trim)
+                        .filter(role -> !role.isEmpty())
+                        .toList();
+        if (parsedRoles.isEmpty()) return this;
+        return new AuthContext(
+                token, id, login, fullName, email, parsedRoles, forwardedTaskUsername.trim());
     }
 
     @Override
